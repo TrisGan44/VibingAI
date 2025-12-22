@@ -1,17 +1,7 @@
-import AnimatedBackground from "@/components/AnimatedBackground";
-import ChatContainer from "@/components/ChatContainer";
+import VoiceChatInterface from "@/components/VoiceChatInterface";
 
 const Index = () => {
-  return (
-    <div className="relative min-h-screen w-full overflow-hidden">
-      <AnimatedBackground />
-      
-      {/* Main chat interface */}
-      <div className="relative z-10 h-screen">
-        <ChatContainer />
-      </div>
-    </div>
-  );
+  return <VoiceChatInterface />;
 };
 
 export default Index;
