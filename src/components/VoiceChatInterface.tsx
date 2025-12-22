@@ -4,6 +4,10 @@ import MicButton from "./MicButton";
 import LiveTranscript from "./LiveTranscript";
 import ConversationHistory, { ConversationHistoryRef } from "./ConversationHistory";
 import { Sparkles } from "lucide-react";
+import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
+import { useTextToSpeech } from "@/hooks/useTextToSpeech";
+import { useAIChat } from "@/hooks/useAIChat";
+import { useToast } from "@/hooks/use-toast";
 
 type RecordingState = "idle" | "recording" | "paused";
 
@@ -14,83 +18,139 @@ interface Message {
   timestamp: string;
 }
 
-// Dummy responses for simulation
-const dummyResponses = [
-  "That's a great question! I'd be happy to help you with that.",
-  "I understand what you're looking for. Let me explain...",
-  "Interesting point! Here's what I think about that.",
-  "Thanks for sharing. Based on what you've said, I'd suggest...",
-  "That makes sense. Let me provide some context on this topic.",
-];
-
 const VoiceChatInterface = () => {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const [streamingResponse, setStreamingResponse] = useState("");
   const conversationRef = useRef<ConversationHistoryRef>(null);
+  const { toast } = useToast();
 
-  // Simulate transcription while recording
-  const simulateTranscription = useCallback(() => {
-    const phrases = [
-      "Hello, ",
-      "Hello, I wanted to ask ",
-      "Hello, I wanted to ask about the weather ",
-      "Hello, I wanted to ask about the weather today...",
-    ];
-    
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < phrases.length) {
-        setLiveTranscript(phrases[index]);
-        index++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 600);
+  // Chat history for context
+  const chatHistoryRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
 
-    return () => clearInterval(interval);
-  }, []);
+  // Speech recognition
+  const { 
+    startListening, 
+    stopListening, 
+    resetTranscript,
+    isSupported: speechSupported,
+    error: speechError 
+  } = useSpeechRecognition({
+    onTranscript: (text) => setLiveTranscript(text),
+  });
+
+  // Text to speech
+  const { speak, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
+
+  // AI chat
+  const { sendMessage, isLoading } = useAIChat({
+    onDelta: (delta) => {
+      setStreamingResponse((prev) => prev + delta);
+    },
+    onError: (error) => {
+      toast({
+        variant: "destructive",
+        title: "AI Error",
+        description: error,
+      });
+    },
+  });
 
   const handleToggleRecording = useCallback(() => {
+    if (!speechSupported) {
+      toast({
+        variant: "destructive",
+        title: "Not Supported",
+        description: "Speech recognition is not supported in this browser. Try Chrome or Edge.",
+      });
+      return;
+    }
+
     setRecordingState("recording");
     setLiveTranscript("");
-    simulateTranscription();
+    resetTranscript();
+    startListening();
+    
     // Scroll to bottom when recording starts
     setTimeout(() => {
       conversationRef.current?.scrollToBottom();
     }, 100);
-  }, [simulateTranscription]);
+  }, [speechSupported, startListening, resetTranscript, toast]);
 
   const handlePause = useCallback(() => {
-    setRecordingState((prev) => (prev === "paused" ? "recording" : "paused"));
-  }, []);
+    if (recordingState === "paused") {
+      setRecordingState("recording");
+      startListening();
+    } else {
+      setRecordingState("paused");
+      stopListening();
+    }
+  }, [recordingState, startListening, stopListening]);
 
-  const handleStop = useCallback(() => {
-    if (liveTranscript) {
+  const handleStop = useCallback(async () => {
+    stopListening();
+    
+    const userText = liveTranscript.trim();
+    
+    if (userText) {
       const userMessage: Message = {
         id: Date.now().toString(),
-        content: liveTranscript,
+        content: userText,
         isUser: true,
         timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
       };
 
       setMessages((prev) => [...prev, userMessage]);
-
-      // Simulate AI response after a delay
-      setTimeout(() => {
-        const aiResponse: Message = {
-          id: (Date.now() + 1).toString(),
-          content: dummyResponses[Math.floor(Math.random() * dummyResponses.length)],
+      chatHistoryRef.current.push({ role: "user", content: userText });
+      
+      // Add placeholder for AI response
+      const aiMessageId = (Date.now() + 1).toString();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: aiMessageId,
+          content: "",
           isUser: false,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        };
-        setMessages((prev) => [...prev, aiResponse]);
-      }, 1500);
+        },
+      ]);
+      
+      setStreamingResponse("");
+      
+      try {
+        const response = await sendMessage(chatHistoryRef.current);
+        
+        // Update the AI message with final response
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === aiMessageId ? { ...msg, content: response } : msg
+          )
+        );
+        
+        chatHistoryRef.current.push({ role: "assistant", content: response });
+        
+        // Speak the response
+        speak(response);
+      } catch {
+        // Error handled by onError callback
+        setMessages((prev) => prev.filter((msg) => msg.id !== aiMessageId));
+      }
+      
+      setStreamingResponse("");
     }
 
     setRecordingState("idle");
     setLiveTranscript("");
-  }, [liveTranscript]);
+  }, [liveTranscript, stopListening, sendMessage, speak]);
+
+  // Update streaming message in real-time
+  const displayMessages = messages.map((msg) => {
+    if (!msg.isUser && msg.content === "" && streamingResponse) {
+      return { ...msg, content: streamingResponse };
+    }
+    return msg;
+  });
 
   const isActive = recordingState === "recording" || recordingState === "paused";
 
@@ -101,11 +161,14 @@ const VoiceChatInterface = () => {
         <div className="flex items-center justify-center gap-2">
           <Sparkles className="w-5 h-5 text-primary" />
           <h1 className="text-lg font-semibold text-foreground">Voice AI</h1>
+          {isSpeaking && (
+            <span className="text-xs text-muted-foreground animate-pulse">Speaking...</span>
+          )}
         </div>
       </header>
 
       {/* Conversation History */}
-      <ConversationHistory ref={conversationRef} messages={messages} />
+      <ConversationHistory ref={conversationRef} messages={displayMessages} />
 
       {/* Voice Control Area */}
       <div className="flex-shrink-0 pb-safe">
@@ -133,7 +196,11 @@ const VoiceChatInterface = () => {
 
         {/* Hint Text */}
         <p className="text-center text-xs text-muted-foreground pb-6">
-          {isActive ? "Tap stop to send message" : "Tap to start speaking"}
+          {isLoading 
+            ? "AI is thinking..." 
+            : isActive 
+              ? "Tap stop to send message" 
+              : "Tap to start speaking"}
         </p>
       </div>
     </div>
