@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useImperativeHandle, forwardRef } from "react";
 import ConversationMessage from "./ConversationMessage";
 
 interface Message {
@@ -12,14 +12,30 @@ interface ConversationHistoryProps {
   messages: Message[];
 }
 
-const ConversationHistory = ({ messages }: ConversationHistoryProps) => {
-  const scrollRef = useRef<HTMLDivElement>(null);
+export interface ConversationHistoryRef {
+  scrollToBottom: () => void;
+}
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+const ConversationHistory = forwardRef<ConversationHistoryRef, ConversationHistoryProps>(
+  ({ messages }, ref) => {
+    const scrollRef = useRef<HTMLDivElement>(null);
+
+    const scrollToBottom = () => {
+      if (scrollRef.current) {
+        scrollRef.current.scrollTo({
+          top: scrollRef.current.scrollHeight,
+          behavior: "smooth",
+        });
+      }
+    };
+
+    useImperativeHandle(ref, () => ({
+      scrollToBottom,
+    }));
+
+    useEffect(() => {
+      scrollToBottom();
+    }, [messages]);
 
   if (messages.length === 0) {
     return (
@@ -53,7 +69,10 @@ const ConversationHistory = ({ messages }: ConversationHistoryProps) => {
         />
       ))}
     </div>
-  );
-};
+    );
+  }
+);
+
+ConversationHistory.displayName = "ConversationHistory";
 
 export default ConversationHistory;

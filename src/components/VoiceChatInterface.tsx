@@ -1,8 +1,8 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import VoiceWaveform from "./VoiceWaveform";
 import MicButton from "./MicButton";
 import LiveTranscript from "./LiveTranscript";
-import ConversationHistory from "./ConversationHistory";
+import ConversationHistory, { ConversationHistoryRef } from "./ConversationHistory";
 import { Sparkles } from "lucide-react";
 
 type RecordingState = "idle" | "recording" | "paused";
@@ -27,6 +27,7 @@ const VoiceChatInterface = () => {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
+  const conversationRef = useRef<ConversationHistoryRef>(null);
 
   // Simulate transcription while recording
   const simulateTranscription = useCallback(() => {
@@ -54,6 +55,10 @@ const VoiceChatInterface = () => {
     setRecordingState("recording");
     setLiveTranscript("");
     simulateTranscription();
+    // Scroll to bottom when recording starts
+    setTimeout(() => {
+      conversationRef.current?.scrollToBottom();
+    }, 100);
   }, [simulateTranscription]);
 
   const handlePause = useCallback(() => {
@@ -100,7 +105,7 @@ const VoiceChatInterface = () => {
       </header>
 
       {/* Conversation History */}
-      <ConversationHistory messages={messages} />
+      <ConversationHistory ref={conversationRef} messages={messages} />
 
       {/* Voice Control Area */}
       <div className="flex-shrink-0 pb-safe">
