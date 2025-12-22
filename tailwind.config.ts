@@ -2,7 +2,12 @@ import type { Config } from "tailwindcss";
 
 export default {
   darkMode: ["class"],
-  content: ["./pages/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  content: [
+    "./pages/**/*.{ts,tsx}",
+    "./components/**/*.{ts,tsx}",
+    "./app/**/*.{ts,tsx}",
+    "./src/**/*.{ts,tsx}",
+  ],
   prefix: "",
   theme: {
     container: {
@@ -13,9 +18,6 @@ export default {
       },
     },
     extend: {
-      fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -50,15 +52,19 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        glow: {
-          primary: "hsl(var(--glow-primary))",
-          secondary: "hsl(var(--glow-secondary))",
+        wave: {
+          primary: "hsl(var(--wave-primary))",
+          secondary: "hsl(var(--wave-secondary))",
+          tertiary: "hsl(var(--wave-tertiary))",
         },
-        orb: {
-          1: "hsl(var(--orb-1))",
-          2: "hsl(var(--orb-2))",
-          3: "hsl(var(--orb-3))",
+        surface: {
+          elevated: "hsl(var(--surface-elevated))",
+          subtle: "hsl(var(--surface-subtle))",
         },
+      },
+      fontFamily: {
+        sans: ["DM Sans", "sans-serif"],
+        mono: ["Space Mono", "monospace"],
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -74,20 +80,20 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
-        "message-in": {
-          "0%": { opacity: "0", transform: "translateY(10px) scale(0.98)" },
-          "100%": { opacity: "1", transform: "translateY(0) scale(1)" },
+        wave: {
+          "0%, 100%": { transform: "scaleY(0.3)" },
+          "50%": { transform: "scaleY(1)" },
         },
-        "fade-in": {
-          "0%": { opacity: "0" },
-          "100%": { opacity: "1" },
+        "pulse-ring": {
+          "0%": { transform: "scale(1)", opacity: "0.8" },
+          "100%": { transform: "scale(1.5)", opacity: "0" },
         },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
-        "message-in": "message-in 0.3s ease-out forwards",
-        "fade-in": "fade-in 0.5s ease-out forwards",
+        wave: "wave 1s ease-in-out infinite",
+        "pulse-ring": "pulse-ring 1.5s ease-out infinite",
       },
     },
   },
