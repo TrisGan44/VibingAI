@@ -236,37 +236,11 @@ const VoiceChatInterface = () => {
 
       {/* OpenRouter API Key */}
       <div className="px-6 pt-4">
-        {showKeyForm || !openRouterKey ? (
-          <OpenRouterKeyForm
-            apiKey={openRouterKey}
-            onSave={handleSaveApiKey}
-            onClear={handleClearApiKey}
-          />
-        ) : (
-          <Card>
-            <CardHeader className="pb-3 flex flex-row items-start justify-between space-y-0 gap-4">
-              <div className="space-y-1">
-                <CardTitle className="text-base flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-primary" />
-                  OpenRouter key saved
-                </CardTitle>
-                <CardDescription>
-                  Your API key is stored locally in this browser. You can update or clear it anytime.
-                </CardDescription>
-              </div>
-            </CardHeader>
-            <CardContent className="flex flex-wrap gap-2">
-              <Button type="button" variant="outline" onClick={() => setShowKeyForm(true)}>
-                <Pencil className="w-4 h-4 mr-2" />
-                Update key
-              </Button>
-              <Button type="button" variant="ghost" onClick={handleClearApiKey}>
-                <Trash2 className="w-4 h-4 mr-2" />
-                Clear key
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+        <OpenRouterKeyForm
+          apiKey={openRouterKey}
+          onSave={handleSaveApiKey}
+          onClear={handleClearApiKey}
+        />
       </div>
 
       {/* Conversation History */}
