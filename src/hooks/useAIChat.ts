@@ -19,10 +19,18 @@ export function useAIChat(options: UseAIChatOptions = {}) {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const sendMessage = useCallback(async (messages: Message[]): Promise<string> => {
+  const sendMessage = useCallback(async (messages: Message[], openRouterKey?: string): Promise<string> => {
     setIsLoading(true);
     setError(null);
-    
+
+    if (!openRouterKey) {
+      const missingKeyError = "Please add your OpenRouter API key to send voice requests.";
+      setError(missingKeyError);
+      onError?.(missingKeyError);
+      setIsLoading(false);
+      throw new Error(missingKeyError);
+    }
+
     let fullResponse = "";
 
     try {
@@ -32,7 +40,7 @@ export function useAIChat(options: UseAIChatOptions = {}) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
         },
-        body: JSON.stringify({ messages }),
+        body: JSON.stringify({ messages, openRouterKey }),
       });
 
       if (!response.ok) {
