@@ -2,17 +2,20 @@ import { cn } from "@/lib/utils";
 
 interface VoiceWaveformProps {
   isActive: boolean;
+  levels?: number[];
   className?: string;
 }
 
-const VoiceWaveform = ({ isActive, className }: VoiceWaveformProps) => {
-  const bars = 24;
+const VoiceWaveform = ({ isActive, levels, className }: VoiceWaveformProps) => {
+  const bars = levels?.length || 24;
+  const hasLevels = !!levels && levels.length > 0;
   
   return (
     <div className={cn("flex items-center justify-center gap-[3px] h-16", className)}>
       {Array.from({ length: bars }).map((_, i) => {
         const delay = i * 0.05;
         const baseHeight = Math.sin((i / bars) * Math.PI) * 0.7 + 0.3;
+        const level = hasLevels ? levels[i] ?? 0 : baseHeight;
         
         return (
           <div
@@ -24,8 +27,8 @@ const VoiceWaveform = ({ isActive, className }: VoiceWaveformProps) => {
                 : "bg-muted"
             )}
             style={{
-              height: isActive ? `${baseHeight * 100}%` : "20%",
-              animation: isActive ? `wave 0.8s ease-in-out infinite` : "none",
+              height: isActive ? `${Math.max(level, 0.08) * 100}%` : "20%",
+              animation: isActive && !hasLevels ? `wave 0.8s ease-in-out infinite` : "none",
               animationDelay: `${delay}s`,
               opacity: isActive ? 1 : 0.4,
             }}

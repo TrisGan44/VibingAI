@@ -3,15 +3,14 @@ import VoiceWaveform from "./VoiceWaveform";
 import MicButton from "./MicButton";
 import LiveTranscript from "./LiveTranscript";
 import ConversationHistory, { ConversationHistoryRef } from "./ConversationHistory";
-import { Sparkles } from "lucide-react";
+import { KeyRound, Sparkles } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { useAIChat } from "@/hooks/useAIChat";
+import { useAudioVisualizer } from "@/hooks/useAudioVisualizer";
 import { useToast } from "@/hooks/use-toast";
 import OpenRouterKeyForm from "./OpenRouterKeyForm";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Button } from "./ui/button";
-import { CheckCircle2, Pencil, Trash2 } from "lucide-react";
 
 type RecordingState = "idle" | "recording" | "paused";
 
@@ -65,6 +64,15 @@ const VoiceChatInterface = () => {
     },
   });
 
+  // Audio visualizer
+  const {
+    levels: audioLevels,
+    start: startVisualizer,
+    stop: stopVisualizer,
+    isActive: visualizerActive,
+    error: audioError,
+  } = useAudioVisualizer({ bars: 24 });
+
   // Restore stored API key on load
   useEffect(() => {
     const storedKey = localStorage.getItem(OPENROUTER_STORAGE_KEY);
@@ -73,6 +81,15 @@ const VoiceChatInterface = () => {
       setShowKeyForm(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (!audioError) return;
+    toast({
+      variant: "destructive",
+      title: "Microphone error",
+      description: audioError,
+    });
+  }, [audioError, toast]);
 
   const handleSaveApiKey = useCallback((key: string) => {
     const trimmedKey = key.trim();
@@ -127,6 +144,7 @@ const VoiceChatInterface = () => {
     setLiveTranscript("");
     resetTranscript();
     startListening();
+    void startVisualizer();
     
     // Scroll to bottom when recording starts
     setTimeout(() => {
@@ -138,14 +156,17 @@ const VoiceChatInterface = () => {
     if (recordingState === "paused") {
       setRecordingState("recording");
       startListening();
+      void startVisualizer();
     } else {
       setRecordingState("paused");
       stopListening();
+      stopVisualizer();
     }
-  }, [recordingState, startListening, stopListening]);
+  }, [recordingState, startListening, stopListening, startVisualizer, stopVisualizer]);
 
   const handleStop = useCallback(async () => {
     stopListening();
+    stopVisualizer();
     
     const userText = liveTranscript.trim();
     
@@ -209,7 +230,7 @@ const VoiceChatInterface = () => {
 
     setRecordingState("idle");
     setLiveTranscript("");
-  }, [liveTranscript, stopListening, sendMessage, speak, openRouterKey, toast]);
+  }, [liveTranscript, stopListening, stopVisualizer, sendMessage, speak, openRouterKey, toast]);
 
   // Update streaming message in real-time
   const displayMessages = messages.map((msg) => {
@@ -231,17 +252,31 @@ const VoiceChatInterface = () => {
           {isSpeaking && (
             <span className="text-xs text-muted-foreground animate-pulse">Speaking...</span>
           )}
+          {!showKeyForm && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setShowKeyForm(true)}
+              aria-label="Edit OpenRouter API key"
+              title="Edit OpenRouter API key"
+            >
+              <KeyRound className="w-4 h-4" />
+            </Button>
+          )}
         </div>
       </header>
 
       {/* OpenRouter API Key */}
-      <div className="px-6 pt-4">
-        <OpenRouterKeyForm
-          apiKey={openRouterKey}
-          onSave={handleSaveApiKey}
-          onClear={handleClearApiKey}
-        />
-      </div>
+      {showKeyForm && (
+        <div className="px-6 pt-4">
+          <OpenRouterKeyForm
+            apiKey={openRouterKey}
+            onSave={handleSaveApiKey}
+            onClear={handleClearApiKey}
+          />
+        </div>
+      )}
 
       {/* Conversation History */}
       <ConversationHistory ref={conversationRef} messages={displayMessages} />
@@ -250,7 +285,10 @@ const VoiceChatInterface = () => {
       <div className="flex-shrink-0 pb-safe">
         {/* Waveform Visualization */}
         <div className="px-6 py-4">
-          <VoiceWaveform isActive={recordingState === "recording"} />
+          <VoiceWaveform
+            isActive={recordingState === "recording"}
+            levels={visualizerActive ? audioLevels : undefined}
+          />
         </div>
 
         {/* Live Transcript */}
