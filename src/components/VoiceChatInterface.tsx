@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import VoiceWaveform from "./VoiceWaveform";
 import MicButton from "./MicButton";
 import LiveTranscript from "./LiveTranscript";
@@ -8,6 +8,10 @@ import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
 import { useTextToSpeech } from "@/hooks/useTextToSpeech";
 import { useAIChat } from "@/hooks/useAIChat";
 import { useToast } from "@/hooks/use-toast";
+import OpenRouterKeyForm from "./OpenRouterKeyForm";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
+import { Button } from "./ui/button";
+import { CheckCircle2, Pencil, Trash2 } from "lucide-react";
 
 type RecordingState = "idle" | "recording" | "paused";
 
@@ -18,11 +22,15 @@ interface Message {
   timestamp: string;
 }
 
+const OPENROUTER_STORAGE_KEY = "openrouter_api_key";
+
 const VoiceChatInterface = () => {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingResponse, setStreamingResponse] = useState("");
+  const [openRouterKey, setOpenRouterKey] = useState("");
+  const [showKeyForm, setShowKeyForm] = useState(true);
   const conversationRef = useRef<ConversationHistoryRef>(null);
   const { toast } = useToast();
 
@@ -41,7 +49,7 @@ const VoiceChatInterface = () => {
   });
 
   // Text to speech
-  const { speak, stop: stopSpeaking, isSpeaking } = useTextToSpeech();
+  const { speak, isSpeaking } = useTextToSpeech();
 
   // AI chat
   const { sendMessage, isLoading } = useAIChat({
@@ -57,12 +65,60 @@ const VoiceChatInterface = () => {
     },
   });
 
+  // Restore stored API key on load
+  useEffect(() => {
+    const storedKey = localStorage.getItem(OPENROUTER_STORAGE_KEY);
+    if (storedKey) {
+      setOpenRouterKey(storedKey);
+      setShowKeyForm(false);
+    }
+  }, []);
+
+  const handleSaveApiKey = useCallback((key: string) => {
+    const trimmedKey = key.trim();
+    setOpenRouterKey(trimmedKey);
+
+    if (trimmedKey) {
+      localStorage.setItem(OPENROUTER_STORAGE_KEY, trimmedKey);
+      setShowKeyForm(false);
+      toast({
+        title: "OpenRouter key saved",
+        description: "You're ready to start chatting.",
+      });
+    } else {
+      localStorage.removeItem(OPENROUTER_STORAGE_KEY);
+      toast({
+        title: "OpenRouter key cleared",
+        description: "Add a key to use the voice assistant.",
+      });
+    }
+  }, [toast]);
+
+  const handleClearApiKey = useCallback(() => {
+    setOpenRouterKey("");
+    localStorage.removeItem(OPENROUTER_STORAGE_KEY);
+    setShowKeyForm(true);
+    toast({
+      title: "OpenRouter key cleared",
+      description: "Add a key to use the voice assistant.",
+    });
+  }, [toast]);
+
   const handleToggleRecording = useCallback(() => {
     if (!speechSupported) {
       toast({
         variant: "destructive",
         title: "Not Supported",
         description: "Speech recognition is not supported in this browser. Try Chrome or Edge.",
+      });
+      return;
+    }
+
+    if (!openRouterKey) {
+      toast({
+        variant: "destructive",
+        title: "Add OpenRouter API key",
+        description: "Enter your key above to enable the voice assistant.",
       });
       return;
     }
@@ -76,7 +132,7 @@ const VoiceChatInterface = () => {
     setTimeout(() => {
       conversationRef.current?.scrollToBottom();
     }, 100);
-  }, [speechSupported, startListening, resetTranscript, toast]);
+  }, [speechSupported, startListening, resetTranscript, toast, openRouterKey]);
 
   const handlePause = useCallback(() => {
     if (recordingState === "paused") {
@@ -94,6 +150,17 @@ const VoiceChatInterface = () => {
     const userText = liveTranscript.trim();
     
     if (userText) {
+      if (!openRouterKey) {
+        toast({
+          variant: "destructive",
+          title: "Add OpenRouter API key",
+          description: "Enter your key above to send the message.",
+        });
+        setRecordingState("idle");
+        setLiveTranscript("");
+        return;
+      }
+
       const userMessage: Message = {
         id: Date.now().toString(),
         content: userText,
@@ -119,7 +186,7 @@ const VoiceChatInterface = () => {
       setStreamingResponse("");
       
       try {
-        const response = await sendMessage(chatHistoryRef.current);
+        const response = await sendMessage(chatHistoryRef.current, openRouterKey);
         
         // Update the AI message with final response
         setMessages((prev) =>
@@ -142,7 +209,7 @@ const VoiceChatInterface = () => {
 
     setRecordingState("idle");
     setLiveTranscript("");
-  }, [liveTranscript, stopListening, sendMessage, speak]);
+  }, [liveTranscript, stopListening, sendMessage, speak, openRouterKey, toast]);
 
   // Update streaming message in real-time
   const displayMessages = messages.map((msg) => {
@@ -166,6 +233,41 @@ const VoiceChatInterface = () => {
           )}
         </div>
       </header>
+
+      {/* OpenRouter API Key */}
+      <div className="px-6 pt-4">
+        {showKeyForm || !openRouterKey ? (
+          <OpenRouterKeyForm
+            apiKey={openRouterKey}
+            onSave={handleSaveApiKey}
+            onClear={handleClearApiKey}
+          />
+        ) : (
+          <Card>
+            <CardHeader className="pb-3 flex flex-row items-start justify-between space-y-0 gap-4">
+              <div className="space-y-1">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-primary" />
+                  OpenRouter key saved
+                </CardTitle>
+                <CardDescription>
+                  Your API key is stored locally in this browser. You can update or clear it anytime.
+                </CardDescription>
+              </div>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-2">
+              <Button type="button" variant="outline" onClick={() => setShowKeyForm(true)}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Update key
+              </Button>
+              <Button type="button" variant="ghost" onClick={handleClearApiKey}>
+                <Trash2 className="w-4 h-4 mr-2" />
+                Clear key
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       {/* Conversation History */}
       <ConversationHistory ref={conversationRef} messages={displayMessages} />
