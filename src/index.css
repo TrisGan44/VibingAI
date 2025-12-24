@@ -103,9 +103,25 @@
   .message-user {
     @apply bg-primary text-primary-foreground rounded-2xl rounded-br-md px-4 py-3;
   }
-  
+
   .message-ai {
     @apply bg-secondary text-secondary-foreground rounded-2xl rounded-bl-md px-4 py-3;
+  }
+
+  .message-action {
+    @apply h-8 w-8 rounded-full flex items-center justify-center text-muted-foreground transition-colors border border-transparent;
+  }
+
+  .message-action:hover:not(:disabled) {
+    @apply bg-muted text-foreground;
+  }
+
+  .message-action:focus-visible {
+    @apply outline-none ring-2 ring-offset-2 ring-ring;
+  }
+
+  .message-action:disabled {
+    @apply opacity-40 cursor-not-allowed;
   }
 }
 
@@ -138,4 +154,35 @@
 
 .animate-fade-in-up {
   animation: fade-in-up 0.4s ease-out forwards;
+}
+
+.typing-dots {
+  @apply flex items-center gap-1 text-muted-foreground;
+}
+
+.typing-dots span {
+  @apply inline-block bg-muted-foreground/80 rounded-full;
+  width: 0.45rem;
+  height: 0.45rem;
+  animation: typing-bounce 1s infinite ease-in-out;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes typing-bounce {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(1px);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-1px);
+  }
 }

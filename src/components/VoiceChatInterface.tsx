@@ -19,6 +19,13 @@ interface Message {
   content: string;
   isUser: boolean;
   timestamp: string;
+  isStreaming?: boolean;
+}
+
+interface ChatHistoryEntry {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
 }
 
 const OPENROUTER_STORAGE_KEY = "openrouter_api_key";
@@ -27,14 +34,15 @@ const VoiceChatInterface = () => {
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
-  const [streamingResponse, setStreamingResponse] = useState("");
+  const [streamingMessageId, setStreamingMessageId] = useState<string | null>(null);
   const [openRouterKey, setOpenRouterKey] = useState("");
   const [showKeyForm, setShowKeyForm] = useState(true);
   const conversationRef = useRef<ConversationHistoryRef>(null);
+  const streamingMessageIdRef = useRef<string | null>(null);
   const { toast } = useToast();
 
   // Chat history for context
-  const chatHistoryRef = useRef<{ role: "user" | "assistant"; content: string }[]>([]);
+  const chatHistoryRef = useRef<ChatHistoryEntry[]>([]);
 
   // Speech recognition
   const { 
@@ -53,7 +61,33 @@ const VoiceChatInterface = () => {
   // AI chat
   const { sendMessage, isLoading } = useAIChat({
     onDelta: (delta) => {
-      setStreamingResponse((prev) => prev + delta);
+      const activeMessageId = streamingMessageIdRef.current;
+
+      if (activeMessageId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === activeMessageId
+              ? { ...msg, content: msg.content + delta, isStreaming: true }
+              : msg
+          )
+        );
+      }
+    },
+    onComplete: (fullResponse) => {
+      const activeMessageId = streamingMessageIdRef.current;
+
+      if (activeMessageId) {
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === activeMessageId
+              ? { ...msg, content: fullResponse, isStreaming: false }
+              : msg
+          )
+        );
+      }
+
+      setStreamingMessageId(null);
+      streamingMessageIdRef.current = null;
     },
     onError: (error) => {
       toast({
@@ -190,7 +224,7 @@ const VoiceChatInterface = () => {
       };
 
       setMessages((prev) => [...prev, userMessage]);
-      chatHistoryRef.current.push({ role: "user", content: userText });
+      chatHistoryRef.current.push({ id: userMessage.id, role: "user", content: userText });
       
       // Add placeholder for AI response
       const aiMessageId = (Date.now() + 1).toString();
@@ -201,44 +235,77 @@ const VoiceChatInterface = () => {
           content: "",
           isUser: false,
           timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          isStreaming: true,
         },
       ]);
-      
-      setStreamingResponse("");
-      
+      setStreamingMessageId(aiMessageId);
+      streamingMessageIdRef.current = aiMessageId;
+
       try {
-        const response = await sendMessage(chatHistoryRef.current, openRouterKey);
-        
+        const response = await sendMessage(
+          chatHistoryRef.current.map(({ role, content }) => ({ role, content })),
+          openRouterKey
+        );
+
         // Update the AI message with final response
         setMessages((prev) =>
           prev.map((msg) =>
-            msg.id === aiMessageId ? { ...msg, content: response } : msg
+            msg.id === aiMessageId ? { ...msg, content: response, isStreaming: false } : msg
           )
         );
-        
-        chatHistoryRef.current.push({ role: "assistant", content: response });
-        
+
+        chatHistoryRef.current.push({ id: aiMessageId, role: "assistant", content: response });
+
         // Speak the response
         speak(response);
       } catch {
         // Error handled by onError callback
         setMessages((prev) => prev.filter((msg) => msg.id !== aiMessageId));
+        setStreamingMessageId(null);
+        streamingMessageIdRef.current = null;
       }
-      
-      setStreamingResponse("");
+
+      setStreamingMessageId(null);
+      streamingMessageIdRef.current = null;
     }
 
     setRecordingState("idle");
     setLiveTranscript("");
   }, [liveTranscript, stopListening, stopVisualizer, sendMessage, speak, openRouterKey, toast]);
 
-  // Update streaming message in real-time
-  const displayMessages = messages.map((msg) => {
-    if (!msg.isUser && msg.content === "" && streamingResponse) {
-      return { ...msg, content: streamingResponse };
+  const handleCopyMessage = useCallback(
+    async (message: Message) => {
+      try {
+        await navigator.clipboard.writeText(message.content);
+        toast({ title: "Copied", description: "Message copied to clipboard." });
+      } catch {
+        toast({
+          variant: "destructive",
+          title: "Copy failed",
+          description: "Unable to copy message. Check clipboard permissions.",
+        });
+      }
+    },
+    [toast]
+  );
+
+  const handleReplayMessage = useCallback(
+    (message: Message) => {
+      if (!message.content) return;
+      speak(message.content);
+    },
+    [speak]
+  );
+
+  const handleDeleteMessage = useCallback((messageId: string) => {
+    setMessages((prev) => prev.filter((msg) => msg.id !== messageId));
+    chatHistoryRef.current = chatHistoryRef.current.filter((entry) => entry.id !== messageId);
+
+    if (streamingMessageIdRef.current === messageId) {
+      setStreamingMessageId(null);
+      streamingMessageIdRef.current = null;
     }
-    return msg;
-  });
+  }, []);
 
   const isActive = recordingState === "recording" || recordingState === "paused";
 
@@ -279,7 +346,14 @@ const VoiceChatInterface = () => {
       )}
 
       {/* Conversation History */}
-      <ConversationHistory ref={conversationRef} messages={displayMessages} />
+      <ConversationHistory
+        ref={conversationRef}
+        messages={messages}
+        onCopy={handleCopyMessage}
+        onReplay={handleReplayMessage}
+        onDelete={handleDeleteMessage}
+        streamingMessageId={streamingMessageId}
+      />
 
       {/* Voice Control Area */}
       <div className="flex-shrink-0 pb-safe">
