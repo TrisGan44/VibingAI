@@ -11,8 +11,6 @@ interface UseAIChatOptions {
   onError?: (error: string) => void;
 }
 
-const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
-
 export function useAIChat(options: UseAIChatOptions = {}) {
   const { onDelta, onComplete, onError } = options;
   
@@ -23,6 +21,27 @@ export function useAIChat(options: UseAIChatOptions = {}) {
     setIsLoading(true);
     setError(null);
 
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    const envMissingMessages = [];
+
+    if (!supabaseUrl) {
+      envMissingMessages.push("VITE_SUPABASE_URL");
+    }
+
+    if (!supabasePublishableKey) {
+      envMissingMessages.push("VITE_SUPABASE_PUBLISHABLE_KEY");
+    }
+
+    if (envMissingMessages.length > 0) {
+      const envError = `Missing required environment variable${envMissingMessages.length > 1 ? "s" : ""}: ${envMissingMessages.join(", ")}. Add them to your .env to enable chat.`;
+      setError(envError);
+      onError?.(envError);
+      setIsLoading(false);
+      throw new Error(envError);
+    }
+
     if (!openRouterKey) {
       const missingKeyError = "Please add your OpenRouter API key to send voice requests.";
       setError(missingKeyError);
@@ -31,14 +50,16 @@ export function useAIChat(options: UseAIChatOptions = {}) {
       throw new Error(missingKeyError);
     }
 
+    const chatUrl = `${supabaseUrl}/functions/v1/chat`;
+
     let fullResponse = "";
 
     try {
-      const response = await fetch(CHAT_URL, {
+      const response = await fetch(chatUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${supabasePublishableKey}`,
         },
         body: JSON.stringify({ messages, openRouterKey }),
       });
